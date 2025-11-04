@@ -1,0 +1,21 @@
+# Build output
+bin/
+*.exe
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+.coverage/
+coverage.txt
+*.out
+
+# Temporary files
+*.tmp
+*.log
+cmd/cei/demo.js
