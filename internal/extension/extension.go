@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/yinxulai/go-template/internal/browser"
-	"github.com/yinxulai/go-template/internal/system"
-	"github.com/yinxulai/go-template/internal/types"
-	"github.com/yinxulai/go-template/internal/utils"
+	"github.com/yinxulai/chromium-extension-installer/internal/browser"
+	"github.com/yinxulai/chromium-extension-installer/internal/system"
+	"github.com/yinxulai/chromium-extension-installer/internal/types"
+	"github.com/yinxulai/chromium-extension-installer/internal/utils"
 )
 
 // GetExtensionID generates the extension ID from the file path

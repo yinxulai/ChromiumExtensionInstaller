@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/yinxulai/go-template/internal/types"
-	"github.com/yinxulai/go-template/internal/utils"
+	"github.com/yinxulai/chromium-extension-installer/internal/types"
+	"github.com/yinxulai/chromium-extension-installer/internal/utils"
 )
 
 // UpdateProfile updates browser profile preferences to add an extension

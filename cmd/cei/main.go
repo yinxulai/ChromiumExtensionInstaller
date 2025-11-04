@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/yinxulai/go-template/internal/extension"
+	"github.com/yinxulai/chromium-extension-installer/internal/extension"
 )
 
 func main() {

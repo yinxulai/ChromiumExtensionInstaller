@@ -1,3 +1,3 @@
-module github.com/yinxulai/go-template
+module github.com/yinxulai/chromium-extension-installer
 
 go 1.21

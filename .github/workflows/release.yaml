@@ -1,42 +1,102 @@
-name: Create and publish a Docker image
+name: Release
 
 on:
   release:
     types: [published]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  push:
+    tags:
+      - 'v*'
 
 jobs:
-  build-and-push-image:
+  # Build multi-platform binaries
+  build-binaries:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      packages: write
+    strategy:
+      matrix:
+        include:
+          # Windows platforms (primary target)
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            extension: .exe
+          - goos: windows
+            goarch: arm64
+            suffix: windows-arm64
+            extension: .exe
+          - goos: windows
+            goarch: 386
+            suffix: windows-386
+            extension: .exe
+          
+          # Linux platforms (for development/testing)
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          
+          # macOS/Darwin platforms (for development/testing)
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
-      - name: Log in to the Container registry
-        uses: docker/login-action
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action
+      - name: Setup Go environment
+        uses: actions/setup-go@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          go-version: '1.21'
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          echo "Building cei for ${{ matrix.goos }}/${{ matrix.goarch }}..."
+          go build \
+            -ldflags="-s -w" \
+            -trimpath \
+            -o dist/cei-${{ matrix.suffix }}${{ matrix.extension }} \
+            ./cmd/cei/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
         with:
-          push: true
-          context: .
-          file: build/Dockerfile
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          name: binaries-${{ matrix.suffix }}
+          path: dist/*
+
+  # Upload binaries to Release
+  upload-release:
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          find dist -type f -name "cei-*" | xargs -I {} cp {} release-files/
+          ls -la release-files/
+
+      - name: Upload to release page
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release-files/*
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
