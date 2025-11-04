@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/yinxulai/chromium-extension-installer/internal/types"
 	"github.com/yinxulai/chromium-extension-installer/internal/utils"
 )
 
@@ -16,44 +15,72 @@ func UpdateProfile(profile, extensionID, extensionPath string, key []byte, sid s
 	prefsPath := filepath.Join(profile, "Preferences")
 	securePrefsPath := filepath.Join(profile, "Secure Preferences")
 
-	// Read Preferences
-	prefs := &types.Preferences{}
+	// Read Preferences as raw map to preserve all existing data
+	prefs := make(map[string]interface{})
 	if data, err := os.ReadFile(prefsPath); err == nil {
-		json.Unmarshal(data, prefs)
+		json.Unmarshal(data, &prefs)
 	}
 
-	// Initialize structures
-	if prefs.Extensions == nil {
-		prefs.Extensions = &types.ExtensionsPrefs{}
+	// Navigate/create extensions structure in prefs
+	if prefs["extensions"] == nil {
+		prefs["extensions"] = make(map[string]interface{})
 	}
-	if prefs.Extensions.InstallSignature == nil {
-		prefs.Extensions.InstallSignature = &types.InstallSignature{IDs: []string{}}
-	}
-	if prefs.Extensions.Toolbar == nil {
-		prefs.Extensions.Toolbar = []string{}
-	}
+	extensions := prefs["extensions"].(map[string]interface{})
 
+	// Handle install_signature
+	if extensions["install_signature"] == nil {
+		extensions["install_signature"] = make(map[string]interface{})
+	}
+	installSig := extensions["install_signature"].(map[string]interface{})
+	if installSig["ids"] == nil {
+		installSig["ids"] = []interface{}{}
+	}
+	
 	// Add extension ID if not exists
-	if !utils.Contains(prefs.Extensions.InstallSignature.IDs, extensionID) {
-		prefs.Extensions.InstallSignature.IDs = append(prefs.Extensions.InstallSignature.IDs, extensionID)
+	ids := installSig["ids"].([]interface{})
+	found := false
+	for _, id := range ids {
+		if id.(string) == extensionID {
+			found = true
+			break
+		}
 	}
-	if !utils.Contains(prefs.Extensions.Toolbar, extensionID) {
-		prefs.Extensions.Toolbar = append(prefs.Extensions.Toolbar, extensionID)
+	if !found {
+		installSig["ids"] = append(ids, extensionID)
 	}
 
-	// Read Secure Preferences
-	securePrefs := &types.SecurePreferences{}
+	// Handle toolbar
+	if extensions["toolbar"] == nil {
+		extensions["toolbar"] = []interface{}{}
+	}
+	toolbar := extensions["toolbar"].([]interface{})
+	found = false
+	for _, id := range toolbar {
+		if id.(string) == extensionID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		extensions["toolbar"] = append(toolbar, extensionID)
+	}
+
+	// Read Secure Preferences as raw map to preserve all existing data
+	securePrefs := make(map[string]interface{})
 	if data, err := os.ReadFile(securePrefsPath); err == nil {
-		json.Unmarshal(data, securePrefs)
+		json.Unmarshal(data, &securePrefs)
 	}
 
-	// Initialize structures
-	if securePrefs.Extensions == nil {
-		securePrefs.Extensions = &types.SecureExtensions{}
+	// Navigate/create extensions structure in secure prefs
+	if securePrefs["extensions"] == nil {
+		securePrefs["extensions"] = make(map[string]interface{})
 	}
-	if securePrefs.Extensions.Settings == nil {
-		securePrefs.Extensions.Settings = make(map[string]interface{})
+	secureExtensions := securePrefs["extensions"].(map[string]interface{})
+	
+	if secureExtensions["settings"] == nil {
+		secureExtensions["settings"] = make(map[string]interface{})
 	}
+	settings := secureExtensions["settings"].(map[string]interface{})
 
 	// Create extension data
 	escapedPath := strings.ReplaceAll(extensionPath, "\\", "\\\\")
@@ -61,32 +88,39 @@ func UpdateProfile(profile, extensionID, extensionPath string, key []byte, sid s
 
 	var extDataMap map[string]interface{}
 	json.Unmarshal([]byte(extensionData), &extDataMap)
-	securePrefs.Extensions.Settings[extensionID] = extDataMap
+	settings[extensionID] = extDataMap
 
 	// Calculate HMAC
 	message := fmt.Sprintf("%sextensions.settings.%s%s", sid, extensionID, extensionData)
 	hash := strings.ToUpper(utils.GetHMACSHA256(key, message))
 
-	// Initialize protection structures
-	if securePrefs.Protection == nil {
-		securePrefs.Protection = &types.Protection{}
+	// Navigate/create protection structure
+	if securePrefs["protection"] == nil {
+		securePrefs["protection"] = make(map[string]interface{})
 	}
-	if securePrefs.Protection.Macs == nil {
-		securePrefs.Protection.Macs = &types.Macs{}
+	protection := securePrefs["protection"].(map[string]interface{})
+	
+	if protection["macs"] == nil {
+		protection["macs"] = make(map[string]interface{})
 	}
-	if securePrefs.Protection.Macs.Extensions == nil {
-		securePrefs.Protection.Macs.Extensions = &types.MacsExtensions{}
+	macs := protection["macs"].(map[string]interface{})
+	
+	if macs["extensions"] == nil {
+		macs["extensions"] = make(map[string]interface{})
 	}
-	if securePrefs.Protection.Macs.Extensions.Settings == nil {
-		securePrefs.Protection.Macs.Extensions.Settings = make(map[string]string)
+	macsExtensions := macs["extensions"].(map[string]interface{})
+	
+	if macsExtensions["settings"] == nil {
+		macsExtensions["settings"] = make(map[string]interface{})
 	}
-
-	securePrefs.Protection.Macs.Extensions.Settings[extensionID] = hash
+	macsSettings := macsExtensions["settings"].(map[string]interface{})
+	
+	macsSettings[extensionID] = hash
 
 	// Calculate super_mac
-	macsJSON, _ := json.Marshal(securePrefs.Protection.Macs)
+	macsJSON, _ := json.Marshal(macs)
 	superMacMessage := fmt.Sprintf("%s%s", sid, string(macsJSON))
-	securePrefs.Protection.SuperMac = strings.ToUpper(utils.GetHMACSHA256(key, superMacMessage))
+	protection["super_mac"] = strings.ToUpper(utils.GetHMACSHA256(key, superMacMessage))
 
 	// Write files
 	prefsData, _ := json.MarshalIndent(prefs, "", "  ")
@@ -107,43 +141,74 @@ func RemoveFromProfile(profile, extensionID string, key []byte, sid string) erro
 	prefsPath := filepath.Join(profile, "Preferences")
 	securePrefsPath := filepath.Join(profile, "Secure Preferences")
 
-	// Read Preferences
-	prefs := &types.Preferences{}
+	// Read Preferences as raw map to preserve all existing data
+	prefs := make(map[string]interface{})
 	if data, err := os.ReadFile(prefsPath); err == nil {
-		json.Unmarshal(data, prefs)
+		json.Unmarshal(data, &prefs)
 	}
 
 	// Remove from Preferences
-	if prefs.Extensions != nil {
-		if prefs.Extensions.InstallSignature != nil {
-			prefs.Extensions.InstallSignature.IDs = utils.RemoveString(prefs.Extensions.InstallSignature.IDs, extensionID)
+	if prefs["extensions"] != nil {
+		extensions := prefs["extensions"].(map[string]interface{})
+		
+		if extensions["install_signature"] != nil {
+			installSig := extensions["install_signature"].(map[string]interface{})
+			if installSig["ids"] != nil {
+				ids := installSig["ids"].([]interface{})
+				newIds := []interface{}{}
+				for _, id := range ids {
+					if id.(string) != extensionID {
+						newIds = append(newIds, id)
+					}
+				}
+				installSig["ids"] = newIds
+			}
 		}
-		if prefs.Extensions.Toolbar != nil {
-			prefs.Extensions.Toolbar = utils.RemoveString(prefs.Extensions.Toolbar, extensionID)
+		
+		if extensions["toolbar"] != nil {
+			toolbar := extensions["toolbar"].([]interface{})
+			newToolbar := []interface{}{}
+			for _, id := range toolbar {
+				if id.(string) != extensionID {
+					newToolbar = append(newToolbar, id)
+				}
+			}
+			extensions["toolbar"] = newToolbar
 		}
 	}
 
-	// Read Secure Preferences
-	securePrefs := &types.SecurePreferences{}
+	// Read Secure Preferences as raw map to preserve all existing data
+	securePrefs := make(map[string]interface{})
 	if data, err := os.ReadFile(securePrefsPath); err == nil {
-		json.Unmarshal(data, securePrefs)
+		json.Unmarshal(data, &securePrefs)
 	}
 
 	// Remove from Secure Preferences
-	if securePrefs.Extensions != nil && securePrefs.Extensions.Settings != nil {
-		delete(securePrefs.Extensions.Settings, extensionID)
+	if securePrefs["extensions"] != nil {
+		extensions := securePrefs["extensions"].(map[string]interface{})
+		if extensions["settings"] != nil {
+			settings := extensions["settings"].(map[string]interface{})
+			delete(settings, extensionID)
+		}
 	}
 
-	if securePrefs.Protection != nil && securePrefs.Protection.Macs != nil &&
-		securePrefs.Protection.Macs.Extensions != nil && securePrefs.Protection.Macs.Extensions.Settings != nil {
-		delete(securePrefs.Protection.Macs.Extensions.Settings, extensionID)
-	}
-
-	// Recalculate super_mac
-	if securePrefs.Protection != nil && securePrefs.Protection.Macs != nil {
-		macsJSON, _ := json.Marshal(securePrefs.Protection.Macs)
-		superMacMessage := fmt.Sprintf("%s%s", sid, string(macsJSON))
-		securePrefs.Protection.SuperMac = strings.ToUpper(utils.GetHMACSHA256(key, superMacMessage))
+	if securePrefs["protection"] != nil {
+		protection := securePrefs["protection"].(map[string]interface{})
+		if protection["macs"] != nil {
+			macs := protection["macs"].(map[string]interface{})
+			if macs["extensions"] != nil {
+				macsExtensions := macs["extensions"].(map[string]interface{})
+				if macsExtensions["settings"] != nil {
+					macsSettings := macsExtensions["settings"].(map[string]interface{})
+					delete(macsSettings, extensionID)
+				}
+			}
+			
+			// Recalculate super_mac
+			macsJSON, _ := json.Marshal(macs)
+			superMacMessage := fmt.Sprintf("%s%s", sid, string(macsJSON))
+			protection["super_mac"] = strings.ToUpper(utils.GetHMACSHA256(key, superMacMessage))
+		}
 	}
 
 	// Write files

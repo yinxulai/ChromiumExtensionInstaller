@@ -2,13 +2,34 @@
 
 A command-line tool to install and uninstall Chrome extensions programmatically on Windows.
 
+## ⚠️ IMPORTANT WARNINGS
+
+1. **CLOSE YOUR BROWSER COMPLETELY** before running this tool
+   - All browser windows and background processes must be closed
+   - Check Task Manager to ensure no browser processes are running
+   - Failure to do so may result in the changes not taking effect
+
+2. **BACKUP YOUR BROWSER DATA** before first use
+   - This tool modifies browser configuration files
+   - Backup location: `%LOCALAPPDATA%\<BrowserName>\User Data\`
+   - Consider backing up:
+     - `Default/Preferences`
+     - `Default/Secure Preferences`
+     - All `Profile X` folders
+
+3. **DISABLE CHROME SYNC temporarily** to avoid sync conflicts
+   - Chrome may sync back old settings if sync is enabled
+   - Re-enable after verifying the extension is working
+
 ## Features
 
-- Install Chrome extensions from `.zip` files
+- Install Chrome extensions from `.zip` files to multiple Chromium browsers
+- Supports: Chrome, Edge, Brave, Opera, Vivaldi, Chromium
 - Uninstall installed extensions
-- Automatically updates Chrome profile preferences
-- Handles multiple Chrome profiles
+- Automatically updates browser profile preferences
+- Handles multiple browser profiles
 - Generates proper extension IDs and security signatures
+- Preserves all existing browser settings and data
 - Modular architecture with clean separation of concerns
 
 ## Installation
